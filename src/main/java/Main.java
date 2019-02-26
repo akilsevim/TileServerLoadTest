@@ -17,7 +17,7 @@ public class Main {
         BloomFilter<Long> bloomFilter = BloomFilter.readFrom(fis, Funnels.longFunnel());
 
         boolean useBloom = false;
-        int bloomLevel = 14;
+        int bloomLevel = 9;
 
         String server = "http://localhost:10000/dynamic/visualize.cgi/plots/CEMETERY_plot/tile-{z}-{x}-{y}.png";
 
