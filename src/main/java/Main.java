@@ -13,7 +13,7 @@ public class Main {
 
     public static void main(String[] args) throws IOException, InterruptedException {
 
-        FileInputStream fis = new FileInputStream(new File("bloom-filter-9-14"));
+        FileInputStream fis = new FileInputStream(new File("bloom-filter-9"));
         BloomFilter<Long> bloomFilter = BloomFilter.readFrom(fis, Funnels.longFunnel());
 
         boolean useBloom = false;
