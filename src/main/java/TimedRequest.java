@@ -1,3 +1,4 @@
+import com.google.common.hash.BloomFilter;
 import com.mashape.unirest.http.HttpResponse;
 import com.mashape.unirest.http.Unirest;
 import com.mashape.unirest.http.async.Callback;
@@ -14,10 +15,13 @@ public class TimedRequest extends TimerTask {
     private int multiplier;
     private boolean isDone;
     private int id;
-    private Hashtable<Long, Long> requests;
-    private Hashtable<Long, Long> failed;
+    private Hashtable<String, Long> requests;
+    private Hashtable<String, Long> failed;
+    private BloomFilter bloom;
+    private boolean bloomEnabled = false;
+    private int bloomLevel;
 
-    TimedRequest(int id, String url, JSONArray ja, int multiplier, Hashtable<Long,Long> requests,Hashtable<Long,Long> failed) {
+    TimedRequest(int id, String url, JSONArray ja, int multiplier, Hashtable<String,Long> requests,Hashtable<String,Long> failed) {
         this.url = url;
         this.ja = ja;
         this.multiplier = multiplier;
@@ -25,6 +29,20 @@ public class TimedRequest extends TimerTask {
         this.id = id;
         this.requests = requests;
         this.failed = failed;
+        this.id = id;
+    }
+    TimedRequest(int id, String url, JSONArray ja, int multiplier, Hashtable<String,Long> requests, Hashtable<String,Long> failed, BloomFilter bloom, int bloomLevel) {
+        this.url = url;
+        this.id = id;
+        this.ja = ja;
+        this.multiplier = multiplier;
+        this.isDone = false;
+        this.id = id;
+        this.requests = requests;
+        this.failed = failed;
+        this.bloom = bloom;
+        this.bloomEnabled = true;
+        this.bloomLevel = bloomLevel;
     }
 
     public boolean isDone() {
@@ -39,6 +57,15 @@ public class TimedRequest extends TimerTask {
         return (1L << (2*z)) | (((long)x) << z) | (y);
     }
 
+    public long findParent(int z, int x, int y, int level) {
+        while(z > level) {
+            x /= 2;
+            y /= 2;
+            z--;
+        }
+        return encode(z,x,y);
+    }
+
     public void run() {
         final Iterator jaIterator = ja.iterator();
 
@@ -46,21 +73,41 @@ public class TimedRequest extends TimerTask {
 
             final JSONObject tile = (JSONObject) jaIterator.next();
 
-            String finalUrl = this.url.replace("{z}", tile.get("z").toString());
-            finalUrl = finalUrl.replace("{x}", tile.get("x").toString());
-            finalUrl = finalUrl.replace("{y}", tile.get("y").toString());
+            Integer z = Integer.valueOf(tile.get("z").toString());
+            Integer x = Integer.valueOf(tile.get("x").toString());
+            Integer y = Integer.valueOf(tile.get("y").toString());
 
-            final long tileID = encode(Integer.valueOf(tile.get("z").toString()), Integer.valueOf(tile.get("x").toString()), Integer.valueOf(tile.get("y").toString()));
+            String finalUrl = this.url.replace("{z}", z.toString());
+            finalUrl = finalUrl.replace("{x}", x.toString());
+            finalUrl = finalUrl.replace("{y}", y.toString());
+
+
+            final long tileID = encode(z, x, y);
+
+            if(bloomEnabled) {
+                long tID = tileID;
+
+                if(z > bloomLevel) {
+                    tID = findParent(z,x,y,bloomLevel);
+                }
+
+                if(!bloom.mightContain(tID)) {
+                    if(!jaIterator.hasNext()) isDone = true;
+                    continue;
+                }
+
+            }
 
             final String finalUrl1 = finalUrl;
             final long start = new Date().getTime();
             for(int i = 0; i < multiplier; i++) {
+                final int finalI = i;
                 Unirest.post(finalUrl).asBinaryAsync(new Callback<InputStream>() {
                     public void completed(HttpResponse<InputStream> httpResponse) {
                         long ft = new Date().getTime() - start;
                         //System.out.println(finalUrl1 + ": Done (" + (ft) + ")");
                         synchronized (requests){
-                            requests.put(tileID, ft);
+                            requests.put(id + "-"+ finalI +"-"+tileID, ft);
                         }
                         if(!jaIterator.hasNext()) isDone = true;
                     }
@@ -68,9 +115,10 @@ public class TimedRequest extends TimerTask {
                     public void failed(UnirestException e) {
 
                         long ft = new Date().getTime() - start;
-                        System.out.println("Failed:" + e.getMessage());
+                        //System.out.println("Failed:" + e.getMessage());
                         synchronized (failed){
-                            failed.put(tileID, ft);
+                            failed.put(id + "-"+ finalI +"-"+tileID, ft);
+                            requests.put(id + "-"+ finalI +"-"+tileID, ft);
                         }
                         if(!jaIterator.hasNext()) isDone = true;
 
