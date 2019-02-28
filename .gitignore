@@ -3,3 +3,4 @@ input_1
 target
 *.iml
 .DS_Store
+*.txt

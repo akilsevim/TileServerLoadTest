@@ -106,9 +106,9 @@ public class TimedRequest extends TimerTask {
                     public void completed(HttpResponse<InputStream> httpResponse) {
                         long ft = new Date().getTime() - start;
                         //System.out.println(finalUrl1 + ": Done (" + (ft) + ")");
-                        synchronized (requests){
-                            requests.put(id + "-"+ finalI +"-"+tileID, ft);
-                        }
+
+                        requests.put(id + "-"+ finalI +"-"+tileID, ft);
+
                         if(!jaIterator.hasNext()) isDone = true;
                     }
 
@@ -116,10 +116,10 @@ public class TimedRequest extends TimerTask {
 
                         long ft = new Date().getTime() - start;
                         //System.out.println("Failed:" + e.getMessage());
-                        synchronized (failed){
-                            failed.put(id + "-"+ finalI +"-"+tileID, ft);
-                            requests.put(id + "-"+ finalI +"-"+tileID, ft);
-                        }
+
+                        failed.put(id + "-"+ finalI +"-"+tileID, ft);
+                        requests.put(id + "-"+ finalI +"-"+tileID, ft);
+
                         if(!jaIterator.hasNext()) isDone = true;
 
                     }

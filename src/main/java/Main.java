@@ -13,13 +13,39 @@ public class Main {
 
     public static void main(String[] args) throws IOException, InterruptedException {
 
-        FileInputStream fis = new FileInputStream(new File("bloom-filter-9"));
+        FileInputStream fis = new FileInputStream(new File("ebd_bloom_filter_10"));
         BloomFilter<Long> bloomFilter = BloomFilter.readFrom(fis, Funnels.longFunnel());
+        /*BloomFilter<Long> bloomFilter = BloomFilter.create(
+                Funnels.longFunnel(),
+                50000,
+                0.01);
+
+        Object ids_o = null;
+        try {
+            ids_o = new JSONParser().parse(new FileReader("ebd-empty-tiles.json"));
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
+        JSONArray ids = (JSONArray) ids_o;
+
+
+        for (Object idx:ids
+             ) {
+            bloomFilter.put((Long) idx);
+            System.out.println((Long) idx);
+        }
+        PrintStream outb;
+
+        outb = new PrintStream(new File("ebd_bloom_filter_10"));
+        bloomFilter.writeTo(outb);
+        outb.close();
+        */
+
 
         boolean useBloom = false;
-        int bloomLevel = 9;
+        int bloomLevel = 10;
 
-        String server = "http://localhost:10000/dynamic/visualize.cgi/plots/CEMETERY_plot/tile-{z}-{x}-{y}.png";
+        String server = "http://ec2-13-52-80-164.us-west-1.compute.amazonaws.com/dynamic/visualize.cgi/ebd_plot/tile-{z}-{x}-{y}.png";
 
         try {
             Unirest.setTimeouts(0, 0);
@@ -35,7 +61,7 @@ public class Main {
 
         int magnifier = 1;
         int users = 0;
-        int userLimit = 23;
+        int userLimit = 1;
 
         JSONObject globalJO = new JSONObject();
 
@@ -145,7 +171,7 @@ public class Main {
 
             PrintStream outb;
 
-            outb = new PrintStream(new File("result-" + (useBloom ? "bloom_on" : "bloom_off") + "-" + (users * multiplier) + "-" + (new Date().getTime()) + ".txt"));
+            outb = new PrintStream(new File("ebd-result-" + (useBloom ? "bloom_on" : "bloom_off") + "-" + (users * multiplier) + "-" + (new Date().getTime()) + ".txt"));
             outb.println("Total Request: " + (overLimit + underLimit) +
                     "\nFailed: " + failedCounter +
                     "\nOver Limit: " + overLimit + "(" + ((float) overLimit / (float) (overLimit + underLimit) * 100) + "%)" +
@@ -161,11 +187,12 @@ public class Main {
                     "\n#Users: " + users * multiplier +
                     "\nBloom Filter: " + (useBloom ? "On" : "Off"));
 
-            Thread.sleep(200);
+            Thread.sleep(150);
 
         }
 
         Unirest.shutdown();
+
     }
 
 }
