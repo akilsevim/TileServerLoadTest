@@ -29,7 +29,6 @@ public class TimedRequest extends TimerTask {
         this.id = id;
         this.requests = requests;
         this.failed = failed;
-        this.id = id;
     }
     TimedRequest(int id, String url, JSONArray ja, int multiplier, Hashtable<String,Long> requests, Hashtable<String,Long> failed, BloomFilter bloom, int bloomLevel) {
         this.url = url;
@@ -37,7 +36,6 @@ public class TimedRequest extends TimerTask {
         this.ja = ja;
         this.multiplier = multiplier;
         this.isDone = false;
-        this.id = id;
         this.requests = requests;
         this.failed = failed;
         this.bloom = bloom;

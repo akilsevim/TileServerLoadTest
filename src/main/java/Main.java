@@ -35,7 +35,7 @@ public class Main {
 
         int magnifier = 1;
         int users = 0;
-        int userLimit = 1;
+        int userLimit = 25;
 
         JSONObject globalJO = new JSONObject();
 
@@ -68,10 +68,6 @@ public class Main {
                 }
 
 
-                //threads[i] = new RequestThread(jo, server);
-                //threads[i].run();
-
-
             } catch (IOException e) {
                 e.printStackTrace();
             } catch (ParseException e) {
@@ -83,9 +79,13 @@ public class Main {
 
         }
 
-        for(int testCount = 1; testCount < 6; testCount++) {
+        PrintStream outb;
+        outb = new PrintStream(new File("ebd-result-" + (useBloom ? "bloom_on" : "bloom_off") + "-" + (new Date().getTime()) + ".tsv"));
 
-            int multiplier = testCount;
+
+        for(int testCounter = 1; testCounter < 6; testCounter++) {
+
+            int multiplier = testCounter;
             Hashtable<String, Long> requests = new Hashtable<String, Long>();
             Hashtable<String, Long> failed = new Hashtable<String, Long>();
 
@@ -143,29 +143,21 @@ public class Main {
                 else underLimit++;
             }
 
-            PrintStream outb;
+            if(testCounter == 1) {
+                System.out.println("Users\tBloom Filter\tRequests\tFailed Requests\tDelayed");
+                outb.println("Users\tBloom Filter\tRequests\tFailed Requests\tDelayed");
+            }
 
-            outb = new PrintStream(new File("ebd-result-" + (useBloom ? "bloom_on" : "bloom_off") + "-" + (users * multiplier) + "-" + (new Date().getTime()) + ".txt"));
-            outb.println("Total Request: " + (overLimit + underLimit) +
-                    "\nFailed: " + failedCounter +
-                    "\nOver Limit: " + overLimit + "(" + ((float) overLimit / (float) (overLimit + underLimit) * 100) + "%)" +
-                    "\n#Users: " + users * multiplier +
-                    "\nBloom Filter: " + (useBloom ? "On" : "Off"));
-
-            outb.close();
-
-
-            System.out.println("Total Request: " + (overLimit + underLimit) +
-                    "\nFailed: " + failedCounter +
-                    "\nOver Limit: " + overLimit + "(" + ((float) overLimit / (float) (overLimit + underLimit) * 100) + "%)" +
-                    "\n#Users: " + users * multiplier +
-                    "\nBloom Filter: " + (useBloom ? "On" : "Off"));
+            String line = (users * multiplier) +"\t" + (useBloom ? "On" : "Off") + "\t" +  (overLimit + underLimit) + "\t" + failedCounter + "\t" + overLimit;
+            System.out.println(line);
+            outb.println(line);
 
             Thread.sleep(150);
 
         }
 
         Unirest.shutdown();
+        outb.close();
 
     }
 
