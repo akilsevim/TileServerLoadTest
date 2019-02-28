@@ -15,32 +15,6 @@ public class Main {
 
         FileInputStream fis = new FileInputStream(new File("ebd_bloom_filter_10"));
         BloomFilter<Long> bloomFilter = BloomFilter.readFrom(fis, Funnels.longFunnel());
-        /*BloomFilter<Long> bloomFilter = BloomFilter.create(
-                Funnels.longFunnel(),
-                50000,
-                0.01);
-
-        Object ids_o = null;
-        try {
-            ids_o = new JSONParser().parse(new FileReader("ebd-empty-tiles.json"));
-        } catch (ParseException e) {
-            e.printStackTrace();
-        }
-        JSONArray ids = (JSONArray) ids_o;
-
-
-        for (Object idx:ids
-             ) {
-            bloomFilter.put((Long) idx);
-            System.out.println((Long) idx);
-        }
-        PrintStream outb;
-
-        outb = new PrintStream(new File("ebd_bloom_filter_10"));
-        bloomFilter.writeTo(outb);
-        outb.close();
-        */
-
 
         boolean useBloom = false;
         int bloomLevel = 10;
