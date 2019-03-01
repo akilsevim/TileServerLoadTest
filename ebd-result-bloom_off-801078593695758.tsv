@@ -1,0 +1,5 @@
+Users	Bloom Filter	Requests	Failed Requests	Delayed
+25	Off	7674	0	7403
+50	Off	15348	0	15243
+75	Off	23022	0	22913
+100	Off	30696	0	30583

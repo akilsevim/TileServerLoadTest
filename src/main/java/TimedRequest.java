@@ -15,13 +15,14 @@ public class TimedRequest extends TimerTask {
     private int multiplier;
     private boolean isDone;
     private int id;
-    private Hashtable<String, Long> requests;
-    private Hashtable<String, Long> failed;
+    private Vector<Long> requests;
+    private Vector<Long> failed;
+    private Vector<Long> bloomed;
     private BloomFilter bloom;
     private boolean bloomEnabled = false;
     private int bloomLevel;
 
-    TimedRequest(int id, String url, JSONArray ja, int multiplier, Hashtable<String,Long> requests,Hashtable<String,Long> failed) {
+    TimedRequest(int id, String url, JSONArray ja, int multiplier, Vector<Long> requests,Vector<Long> failed) {
         this.url = url;
         this.ja = ja;
         this.multiplier = multiplier;
@@ -30,7 +31,7 @@ public class TimedRequest extends TimerTask {
         this.requests = requests;
         this.failed = failed;
     }
-    TimedRequest(int id, String url, JSONArray ja, int multiplier, Hashtable<String,Long> requests, Hashtable<String,Long> failed, BloomFilter bloom, int bloomLevel) {
+    TimedRequest(int id, String url, JSONArray ja, int multiplier, Vector<Long> requests, Vector<Long> failed, Vector<Long> bloomed, BloomFilter bloom, int bloomLevel) {
         this.url = url;
         this.id = id;
         this.ja = ja;
@@ -38,6 +39,7 @@ public class TimedRequest extends TimerTask {
         this.isDone = false;
         this.requests = requests;
         this.failed = failed;
+        this.bloomed = bloomed;
         this.bloom = bloom;
         this.bloomEnabled = true;
         this.bloomLevel = bloomLevel;
@@ -83,6 +85,7 @@ public class TimedRequest extends TimerTask {
             final long tileID = encode(z, x, y);
 
             if(bloomEnabled) {
+                long start = System.nanoTime();
                 long tID = tileID;
 
                 if(z > bloomLevel) {
@@ -90,33 +93,35 @@ public class TimedRequest extends TimerTask {
                 }
 
                 if(!bloom.mightContain(tID)) {
+                    long ft = (System.nanoTime() - start) / 1000000;
+                    bloomed.add(ft);
                     if(!jaIterator.hasNext()) isDone = true;
                     continue;
                 }
 
             }
 
-            final String finalUrl1 = finalUrl;
-            final long start = new Date().getTime();
+
             for(int i = 0; i < multiplier; i++) {
+                final long start = System.nanoTime();
                 final int finalI = i;
                 Unirest.post(finalUrl).asBinaryAsync(new Callback<InputStream>() {
                     public void completed(HttpResponse<InputStream> httpResponse) {
-                        long ft = new Date().getTime() - start;
+                        long ft = (System.nanoTime() - start) / 1000000;
                         //System.out.println(finalUrl1 + ": Done (" + (ft) + ")");
 
-                        requests.put(id + "-"+ finalI +"-"+tileID, ft);
+                        requests.add(ft);
 
                         if(!jaIterator.hasNext()) isDone = true;
                     }
 
                     public void failed(UnirestException e) {
 
-                        long ft = new Date().getTime() - start;
+                        long ft = (System.nanoTime() - start) / 1000000;
                         //System.out.println("Failed:" + e.getMessage());
 
-                        failed.put(id + "-"+ finalI +"-"+tileID, ft);
-                        requests.put(id + "-"+ finalI +"-"+tileID, ft);
+                        failed.add(ft);
+                        //requests.put(id + "-"+ finalI +"-"+tileID, ft);
 
                         if(!jaIterator.hasNext()) isDone = true;
 

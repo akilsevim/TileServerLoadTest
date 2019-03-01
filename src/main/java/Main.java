@@ -16,10 +16,10 @@ public class Main {
         FileInputStream fis = new FileInputStream(new File("ebd_bloom_filter_10"));
         BloomFilter<Long> bloomFilter = BloomFilter.readFrom(fis, Funnels.longFunnel());
 
-        boolean useBloom = false;
+        boolean useBloom = true;
         int bloomLevel = 10;
 
-        String server = "http://ec2-13-52-80-164.us-west-1.compute.amazonaws.com/dynamic/visualize.cgi/ebd_plot/tile-{z}-{x}-{y}.png";
+        String server = "http://ec2-52-53-150-190.us-west-1.compute.amazonaws.com/dynamic/visualize.cgi/ebd_plot/tile-{z}-{x}-{y}.png";
 
         try {
             Unirest.setTimeouts(0, 0);
@@ -80,32 +80,32 @@ public class Main {
         }
 
         PrintStream outb;
-        outb = new PrintStream(new File("ebd-result-" + (useBloom ? "bloom_on" : "bloom_off") + "-" + (new Date().getTime()) + ".tsv"));
+        outb = new PrintStream(new File("ebd-result-" + (useBloom ? "bloom_on" : "bloom_off") + "-" + (System.nanoTime()) + ".tsv"));
 
 
-        for(int testCounter = 1; testCounter < 6; testCounter++) {
 
-            int multiplier = testCounter;
-            Hashtable<String, Long> requests = new Hashtable<String, Long>();
-            Hashtable<String, Long> failed = new Hashtable<String, Long>();
+        for(int testCounter = 1; testCounter < 7; testCounter++) {
+
+
+            Vector<Long> requests = new Vector<Long>();
+            Vector<Long> bloomed = new Vector<Long>();
+            Vector<Long> failed = new Vector<Long>();
 
             Set globalJOKeys = globalJO.keySet();
             Iterator globalJOIterator = globalJOKeys.iterator();
 
-
             ArrayList<TimedRequest> tasks = new ArrayList<TimedRequest>();
-            int counter = 0;
             Timer timer = new Timer();
+            int counter = 0;
             while (globalJOIterator.hasNext()) {
                 String k = globalJOIterator.next().toString();
                 if (useBloom)
-                    tasks.add(counter, new TimedRequest(counter, server, (JSONArray) globalJO.get(k), multiplier, requests, failed, bloomFilter, bloomLevel));
+                    tasks.add(counter, new TimedRequest(counter, server, (JSONArray) globalJO.get(k), testCounter, requests, failed, bloomed, bloomFilter, bloomLevel));
                 else
-                    tasks.add(counter, new TimedRequest(counter, server, (JSONArray) globalJO.get(k), multiplier, requests, failed));
+                    tasks.add(counter, new TimedRequest(counter, server, (JSONArray) globalJO.get(k), testCounter, requests, failed));
                 timer.schedule(tasks.get(counter), Long.valueOf(k));
                 counter++;
             }
-
 
             boolean test = true;
             while (test) {
@@ -121,34 +121,40 @@ public class Main {
 
             Thread.sleep(100);
 
-            Set k = requests.keySet();
-            Iterator it = k.iterator();
+
+
 
             int limit = 500;
 
             long overLimit = 0;
             long underLimit = 0;
-            long failedCounter = 0;
+            long failedCounter = failed.size();
 
+            Iterator it = requests.iterator();
             while (it.hasNext()) {
-                long t = requests.get(it.next());
-                //System.out.println(it.next() + ","+t);
+                long t = (Long) it.next();
+                //System.out.println(t);
                 if (t >= limit) overLimit++;
                 else underLimit++;
             }
 
-            for (String aLong : failed.keySet()) {
-                failedCounter++;
-                if (failed.get(aLong) >= limit) overLimit++;
+            /*
+            Iterator it_b = bloomed.iterator();
+            while (it_b.hasNext()) {
+                long t = (Long) it_b.next();
+                System.out.println(t);
+                if (t >= limit) overLimit++;
                 else underLimit++;
             }
+            */
 
             if(testCounter == 1) {
-                System.out.println("Users\tBloom Filter\tRequests\tFailed Requests\tDelayed");
-                outb.println("Users\tBloom Filter\tRequests\tFailed Requests\tDelayed");
+                System.out.println("Users\tBloom Filter\tRequests\tFailed Requests\tDelayed\tD.Percentage");
+                outb.println("Users\tBloom Filter\tRequests\tFailed Requests\tDelayed\tD.Percentage");
             }
-
-            String line = (users * multiplier) +"\t" + (useBloom ? "On" : "Off") + "\t" +  (overLimit + underLimit) + "\t" + failedCounter + "\t" + overLimit;
+            float p = ((float)overLimit / (float)((bloomed.size() * testCounter) + (overLimit + underLimit + failedCounter))) * 100;
+            //String line = (users * multiplier) +"\t" + (useBloom ? "On" : "Off") + "\t" +  (overLimit + underLimit) + "\t" + failedCounter + "\t" + overLimit;
+            String line = (users * testCounter) +"\t" + bloomed.size() * testCounter  + "\t" +  (overLimit + underLimit) + "\t" + failedCounter + "\t" + overLimit + "\t" + p;
             System.out.println(line);
             outb.println(line);
 
