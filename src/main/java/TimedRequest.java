@@ -81,6 +81,8 @@ public class TimedRequest extends TimerTask {
             finalUrl = finalUrl.replace("{x}", x.toString());
             finalUrl = finalUrl.replace("{y}", y.toString());
 
+            final String fu = finalUrl;
+
 
             final long tileID = encode(z, x, y);
 
@@ -94,6 +96,7 @@ public class TimedRequest extends TimerTask {
 
                 if(!bloom.mightContain(tID)) {
                     long ft = (System.nanoTime() - start) / 1000000;
+                    //System.out.println(fu + "\t" + tID + "\t" + tileID);
                     bloomed.add(ft);
                     if(!jaIterator.hasNext()) isDone = true;
                     continue;
@@ -108,7 +111,7 @@ public class TimedRequest extends TimerTask {
                 Unirest.post(finalUrl).asBinaryAsync(new Callback<InputStream>() {
                     public void completed(HttpResponse<InputStream> httpResponse) {
                         long ft = (System.nanoTime() - start) / 1000000;
-                        //System.out.println(finalUrl1 + ": Done (" + (ft) + ")");
+
 
                         requests.add(ft);
 
