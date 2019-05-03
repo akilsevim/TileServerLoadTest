@@ -1,7 +1,9 @@
 .idea
-input_1
 target
 *.iml
 .DS_Store
-*.txt
-*.tsv
+Inputs/
+Outputs/
+BloomFilters/
+
+

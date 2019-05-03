@@ -1,4 +1,3 @@
-import com.google.common.hash.BloomFilter;
 import com.mashape.unirest.http.HttpResponse;
 import com.mashape.unirest.http.Unirest;
 import com.mashape.unirest.http.async.Callback;
@@ -16,29 +15,26 @@ public class TimedRequest extends TimerTask {
     private boolean isDone;
     private int id;
     private Vector<Long> requests;
-    private Vector<Long> failed;
     private Vector<Long> bloomed;
     private BloomFilter bloom;
     private boolean bloomEnabled = false;
     private int bloomLevel;
 
-    TimedRequest(int id, String url, JSONArray ja, int multiplier, Vector<Long> requests,Vector<Long> failed) {
+    TimedRequest(int id, String url, JSONArray ja, int multiplier, Vector<Long> requests) {
         this.url = url;
         this.ja = ja;
         this.multiplier = multiplier;
         this.isDone = false;
         this.id = id;
         this.requests = requests;
-        this.failed = failed;
     }
-    TimedRequest(int id, String url, JSONArray ja, int multiplier, Vector<Long> requests, Vector<Long> failed, Vector<Long> bloomed, BloomFilter bloom, int bloomLevel) {
+    TimedRequest(int id, String url, JSONArray ja, int multiplier, Vector<Long> requests, Vector<Long> bloomed, BloomFilter bloom, int bloomLevel) {
         this.url = url;
         this.id = id;
         this.ja = ja;
         this.multiplier = multiplier;
         this.isDone = false;
         this.requests = requests;
-        this.failed = failed;
         this.bloomed = bloomed;
         this.bloom = bloom;
         this.bloomEnabled = true;
@@ -73,13 +69,13 @@ public class TimedRequest extends TimerTask {
 
             final JSONObject tile = (JSONObject) jaIterator.next();
 
-            Integer z = Integer.valueOf(tile.get("z").toString());
-            Integer x = Integer.valueOf(tile.get("x").toString());
-            Integer y = Integer.valueOf(tile.get("y").toString());
+            int z = Integer.parseInt(tile.get("z").toString());
+            int x = Integer.valueOf(tile.get("x").toString());
+            int y = Integer.valueOf(tile.get("y").toString());
 
-            String finalUrl = this.url.replace("{z}", z.toString());
-            finalUrl = finalUrl.replace("{x}", x.toString());
-            finalUrl = finalUrl.replace("{y}", y.toString());
+            String finalUrl = this.url.replace("{z}", String.valueOf(z));
+            finalUrl = finalUrl.replace("{x}", String.valueOf(x));
+            finalUrl = finalUrl.replace("{y}", String.valueOf(y));
 
             final String fu = finalUrl;
 
@@ -123,7 +119,7 @@ public class TimedRequest extends TimerTask {
                         long ft = (System.nanoTime() - start) / 1000000;
                         //System.out.println("Failed:" + e.getMessage());
 
-                        failed.add(ft);
+                        requests.add(ft);
                         //requests.put(id + "-"+ finalI +"-"+tileID, ft);
 
                         if(!jaIterator.hasNext()) isDone = true;
