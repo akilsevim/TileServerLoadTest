@@ -144,14 +144,16 @@ public class BitArray {
   public void read(String path) throws IOException {
     int numEntriesToRead = (int) ((size + BitsPerEntry - 1) / BitsPerEntry);
     InputStream finput = new FileInputStream(path);
-    Base64InputStream base64InputStream = new Base64InputStream(finput);
+    //Base64InputStream base64InputStream = new Base64InputStream(finput, false);
 
-    byte[] imageBytes = new byte[numEntriesToRead];
-    base64InputStream.read(imageBytes, 0, imageBytes.length);
+    byte[] imageBytes = new byte[numEntriesToRead*8];
+    finput.read(imageBytes, 0, imageBytes.length);
+
+    //String imageStr = new String(imageBytes);
+    ByteBuffer bbuffer = ByteBuffer.wrap(imageBytes);
+    for (int i = 0; i < numEntriesToRead; i++)
+      entries[i] = bbuffer.getLong();
     finput.close();
-    base64InputStream.close();
-    String imageStr = new String(imageBytes);
-    System.out.println(imageStr);
     /*
     int numEntriesToRead = (int) ((size + BitsPerEntry - 1) / BitsPerEntry);
     FileInputStream fIS = new FileInputStream(new File(path));

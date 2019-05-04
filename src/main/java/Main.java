@@ -11,21 +11,27 @@ public class Main {
 
     public static void main(String[] args) throws IOException, InterruptedException {
 
-        BloomFilter bloomFilter = new BloomFilter(63631427, 0.01, 7);
-        bloomFilter.read("Cemetery_Opt/bloom_filter.json");
+        BloomFilter bloomFilter = new BloomFilter(227140656, 0.01, 7);
+        bloomFilter.read("BloomFilters/ebd_bloomfilter/bloom_filter");
 
 
         boolean useBloom = false;
-        int bloomLevel = 9;
+        int bloomLevel = 19;
+        int start = 1;
+        int stop = 9;
+        int increment = 1;
+
+        //Time limit for requests
+        int limit = 500;
 
         //String server = "http://ec2-54-92-194-172.compute-1.amazonaws.com/dynamic/visualize.cgi/ebd_plot/";
-        //String server = "http://ec2-13-229-201-19.ap-southeast-1.compute.amazonaws.com/dynamic/visualize.cgi/ebd_plot/";
-        String server = "http://localhost:8890/dynamic/visualize.cgi/output/Plots/Cemetery/";
+        String server = "http://ec2-54-153-52-9.us-west-1.compute.amazonaws.com/dynamic/visualize.cgi/ebd_plot/";
+        //String server = "http://localhost:8890/dynamic/visualize.cgi/output/Plots/Cemetery/";
 
         String tilePattern = "tile-{z}-{x}-{y}.png";
 
-        //String testTitle = "EBird_N_California";
-        String testTitle = "Cemetery_Local";
+        String testTitle = "EBird_N_California_Dense";
+        //String testTitle = "Cemetery_Local";
         try {
             System.out.println("Testing server...");
             Unirest.setTimeouts(0, 0);
@@ -39,7 +45,7 @@ public class Main {
 
         server += tilePattern;
 
-        File folder = new File("input");
+        File folder = new File("Inputs/ebd_input_dense");
         JSONArray users = new JSONArray();
         for (final File fileEntry : folder.listFiles()) {
             try {
@@ -60,15 +66,11 @@ public class Main {
 
         System.out.println("Test files are loaded.");
 
-
-        int start = 5;
-        int stop = 100;
-        int increment = 5;
-
-        int userNumber = users.size();
-
         PrintStream finalTestResult;
-        finalTestResult = new PrintStream(new File(testTitle + "-" + (useBloom ? "bloom_on" : "bloom_off") + ".tsv"));
+        File finalFile = new File("Outputs/"+testTitle+"/"+testTitle + "-" + (useBloom ? "bloom_on" : "bloom_off") + "-"+start+"_"+stop+".tsv");
+        finalFile.getParentFile().mkdirs();
+        finalTestResult = new PrintStream(finalFile);
+
 
         for(int i = start; i <= stop; i += increment) {
             System.out.println("Loading test for " + i + " users");
@@ -136,13 +138,12 @@ public class Main {
 
             Thread.sleep(100);
 
-            int limit = 500;
-
             long overLimit = 0;
             long underLimit = 0;
 
             PrintStream timesForEachRequest;
-            timesForEachRequest = new PrintStream(new File(testTitle+"-" + (useBloom ? "bloom_on" : "bloom_off") + "-" + i + ".tsv"));
+            File timesfile = new File("Outputs/"+testTitle+"/"+testTitle+"-" + (useBloom ? "bloom_on" : "bloom_off") + "-" + i + ".tsv");
+            timesForEachRequest = new PrintStream(timesfile);
 
             Iterator it = requests.iterator();
             while (it.hasNext()) {

@@ -54,17 +54,14 @@ public class BloomFilter extends BitArray {
     }
 
     public boolean mightContain(long element) {
-        /*int hash1 = MurmurHash3_32_Long(element, 0);
+        int hash1 = MurmurHash3_32_Long(element, 0);
         int hash2 = MurmurHash3_32_Long(element, 1);
 
         long index;
-        boolean newValue = false;
         for (int i = 0; i < k; i++) {
             index = Math.abs(((long)hash1 + (long)i * (long)hash2) % m);
-            if(!get(index)) newValue = true;
-            set(index, true);
+            if(!get(index)) return false;
         }
-        if(newValue) countApprx++;*/
         return true;
     }
 
