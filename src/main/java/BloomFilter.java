@@ -16,7 +16,7 @@ public class BloomFilter extends BitArray {
     //private BitArray bits = new BitArray();
     private int m;
     private int k;
-    private double p = 0.01;
+    private double p = 0;
     private double n;
     private long countApprx = 0;
 
@@ -27,17 +27,21 @@ public class BloomFilter extends BitArray {
      * Create a bloom filter with given parameters.
      *
      * @param m number of bits
-     * @param p false positive rate
      * @param k number of hash functions
      */
-    public BloomFilter(int m, double p, int k) {
+    public BloomFilter(int m, int k) {
         super(m);
         this.m = m;
-        this.p = p;
         this.k = k;
-
-        this.n = Math.ceil(m / (-k / Math.log(1 - Math.exp(Math.log(p) / k))));
     }
+
+    public double getFPP() {
+        return Math.pow(((double) this.countOnes() / (double) this.m), this.k);
+    }
+    public long estimateSize() {
+        return (long) (-((float) this.m * Math.log(1.0f - ((float)this.countOnes() / (float)this.m))) / (float) this.k);
+    }
+
 
     public void put(long element) {
         int hash1 = MurmurHash3_32_Long(element, 0);
@@ -58,9 +62,11 @@ public class BloomFilter extends BitArray {
         int hash2 = MurmurHash3_32_Long(element, 1);
 
         long index;
+
         for (int i = 0; i < k; i++) {
             index = Math.abs(((long)hash1 + (long)i * (long)hash2) % m);
-            if(!get(index)) return false;
+            boolean x = get(index);
+            if(!x) return false;
         }
         return true;
     }

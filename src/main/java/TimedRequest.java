@@ -10,15 +10,22 @@ import java.util.*;
 
 public class TimedRequest extends TimerTask {
     private String url;
+    private String tilePattern;
     private JSONArray ja;
     private int multiplier;
     private boolean isDone;
     private int id;
     private Vector<Long> requests;
     private Vector<Long> bloomed;
+    private Vector<Long> statics;
+    private Vector<Long> times;
     private BloomFilter bloom;
     private boolean bloomEnabled = false;
     private int bloomLevel;
+
+    private boolean staticEnabled = false;
+    private JSONArray staticTileIDs;
+    private String staticServer;
 
     TimedRequest(int id, String url, JSONArray ja, int multiplier, Vector<Long> requests) {
         this.url = url;
@@ -28,17 +35,26 @@ public class TimedRequest extends TimerTask {
         this.id = id;
         this.requests = requests;
     }
-    TimedRequest(int id, String url, JSONArray ja, int multiplier, Vector<Long> requests, Vector<Long> bloomed, BloomFilter bloom, int bloomLevel) {
+    TimedRequest(int id, String url, String tilePattern, JSONArray ja, int multiplier, Vector<Long> requests, boolean useBloom, Vector<Long> bloomed, BloomFilter bloom, int bloomLevel, Vector<Long> staticCatched, JSONArray staticTiles, String staticServer, Vector<Long> times) {
         this.url = url;
         this.id = id;
         this.ja = ja;
         this.multiplier = multiplier;
         this.isDone = false;
         this.requests = requests;
+        this.tilePattern = tilePattern;
+
+        this.bloomEnabled = useBloom;
         this.bloomed = bloomed;
         this.bloom = bloom;
-        this.bloomEnabled = true;
         this.bloomLevel = bloomLevel;
+
+        if(staticTiles.size() != 0) this.staticEnabled = true;
+        this.staticTileIDs = staticTiles;
+        this.statics = staticCatched;
+        this.staticServer = staticServer;
+
+        this.times = times;
     }
 
     public boolean isDone() {
@@ -73,13 +89,6 @@ public class TimedRequest extends TimerTask {
             int x = Integer.valueOf(tile.get("x").toString());
             int y = Integer.valueOf(tile.get("y").toString());
 
-            String finalUrl = this.url.replace("{z}", String.valueOf(z));
-            finalUrl = finalUrl.replace("{x}", String.valueOf(x));
-            finalUrl = finalUrl.replace("{y}", String.valueOf(y));
-
-            final String fu = finalUrl;
-
-
             final long tileID = encode(z, x, y);
 
             if(bloomEnabled) {
@@ -92,44 +101,72 @@ public class TimedRequest extends TimerTask {
 
                 if(!bloom.mightContain(tID)) {
                     long ft = (System.nanoTime() - start) / 1000000;
-                    //System.out.println(fu + "\t" + tID + "\t" + tileID);
+                    //System.out.println(tileID + ":" +(System.nanoTime() - start));
                     bloomed.add(ft);
                     if(!jaIterator.hasNext()) isDone = true;
                     continue;
                 }
-
             }
+
+            String finalTileFile = this.tilePattern.replace("{z}", String.valueOf(z));
+            finalTileFile = finalTileFile.replace("{x}", String.valueOf(x));
+            finalTileFile = finalTileFile.replace("{y}", String.valueOf(y));
+
+            String finalUrl = this.url + finalTileFile;
+
+            boolean staticFound = false;
+
+            if(staticEnabled) {
+                //long start = System.nanoTime();
+                if(staticTileIDs.contains(tileID)) {
+                    //long ft = (System.nanoTime() - start) / 1000000;
+                    //System.out.println(tileID + ":" + ft);
+                    //statics.add(ft);
+                    //if(!jaIterator.hasNext()) isDone = true;
+                    //continue;
+                    staticFound = true;
+                    finalUrl = this.staticServer + finalTileFile;
+                }
+            }
+
+            final boolean sf = staticFound;
+            final String fu = finalUrl;
 
 
             for(int i = 0; i < multiplier; i++) {
                 final long start = System.nanoTime();
-                final int finalI = i;
-                Unirest.post(finalUrl).asBinaryAsync(new Callback<InputStream>() {
-                    public void completed(HttpResponse<InputStream> httpResponse) {
-                        long ft = (System.nanoTime() - start) / 1000000;
+                try {
+                    Unirest.post(finalUrl).asBinaryAsync(new Callback<InputStream>() {
+                        public void completed(HttpResponse<InputStream> httpResponse) {
+                            //System.out.println("Completed:" + fu);
+                            long ft = (System.nanoTime() - start) / 1000000;
+                            if (sf) statics.add(ft);
+                            else requests.add(ft);
 
+                            if (!jaIterator.hasNext()) isDone = true;
+                        }
 
-                        requests.add(ft);
+                        public void failed(UnirestException e) {
+                            //System.out.println("Failed:" + fu);
+                            long ft = (System.nanoTime() - start) / 1000000;
+                            //System.out.println("Failed:" + e.getMessage());
 
-                        if(!jaIterator.hasNext()) isDone = true;
-                    }
+                            if (sf) statics.add(ft);
+                            else requests.add(ft);
 
-                    public void failed(UnirestException e) {
+                            //requests.put(id + "-"+ finalI +"-"+tileID, ft);
 
-                        long ft = (System.nanoTime() - start) / 1000000;
-                        //System.out.println("Failed:" + e.getMessage());
+                            if (!jaIterator.hasNext()) isDone = true;
 
-                        requests.add(ft);
-                        //requests.put(id + "-"+ finalI +"-"+tileID, ft);
+                        }
 
-                        if(!jaIterator.hasNext()) isDone = true;
+                        public void cancelled() {
 
-                    }
-
-                    public void cancelled() {
-
-                    }
-                });
+                        }
+                    });
+                } catch (Exception e) {
+                    System.out.println(fu + ":" +e.getMessage());
+                }
             }
 
         }

@@ -104,6 +104,7 @@ public class BitArray {
   public boolean get(long i) {
     int entry = (int) (i / BitsPerEntry);
     int offset = (int) (i % BitsPerEntry);
+    System.out.println("entry:"+ entry+" offset: "+ offset);
     return (entries[entry] & (1L << offset)) != 0;
   }
 
@@ -151,8 +152,9 @@ public class BitArray {
 
     //String imageStr = new String(imageBytes);
     ByteBuffer bbuffer = ByteBuffer.wrap(imageBytes);
-    for (int i = 0; i < numEntriesToRead; i++)
+    for (int i = 0; i < numEntriesToRead; i++) {
       entries[i] = bbuffer.getLong();
+    }
     finput.close();
     /*
     int numEntriesToRead = (int) ((size + BitsPerEntry - 1) / BitsPerEntry);

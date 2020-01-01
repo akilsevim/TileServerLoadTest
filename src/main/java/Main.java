@@ -8,30 +8,48 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.*;
 
 public class Main {
-
     public static void main(String[] args) throws IOException, InterruptedException {
 
-        BloomFilter bloomFilter = new BloomFilter(227140656, 0.01, 7);
-        bloomFilter.read("BloomFilters/ebd_bloomfilter/bloom_filter");
-
-
-        boolean useBloom = false;
+        //Bloom Filter Configuration
+        boolean useBloom = true;
         int bloomLevel = 19;
-        int start = 1;
-        int stop = 9;
-        int increment = 1;
+        int numberOfHashFunctions = 17;
+        int sizeOfTheBloomFilter = 567619585;
+        String bloomFilterPath = "BloomFilters/ebd_bloomfilter_55MB_19/bloom_filter";
 
-        //Time limit for requests
-        int limit = 500;
+        //Static tile redirection configuration
+        boolean useStatic = true;
+        String staticTileIDsPath = "StaticTileIds/staticTileIDs.json";
 
-        //String server = "http://ec2-54-92-194-172.compute-1.amazonaws.com/dynamic/visualize.cgi/ebd_plot/";
-        String server = "http://ec2-54-153-52-9.us-west-1.compute.amazonaws.com/dynamic/visualize.cgi/ebd_plot/";
-        //String server = "http://localhost:8890/dynamic/visualize.cgi/output/Plots/Cemetery/";
-
+        //Test configuration
+        int start = 2;
+        int stop = 50;
+        int increment = 2;
+        String inputPath = "Inputs/ebd_input_dense,Inputs/ebd_input_sparse"; //To make a combination of requests add additional paths with comas
+        String testTitle = "Ebird_N_California_Combined_Static_On_Bloom_On_S3_2-50";
+        int limit = 500; //Time limit for the response times
+        String server = "http://ec2-54-215-192-47.us-west-1.compute.amazonaws.com/dynamic/visualize.cgi/ebd_plot/";
+        String staticServer = "https://s3-us-west-1.amazonaws.com/visualizationserver/ebd_plot/";
         String tilePattern = "tile-{z}-{x}-{y}.png";
 
-        String testTitle = "EBird_N_California_Dense";
-        //String testTitle = "Cemetery_Local";
+        //Load Bloom Filter
+        BloomFilter bloomFilter = new BloomFilter(sizeOfTheBloomFilter,numberOfHashFunctions);
+        if(useBloom) {
+            bloomFilter.read(bloomFilterPath);
+            System.out.println("Bloom Filter loaded with false positive probability of " + bloomFilter.getFPP() + " and estimated n is " + bloomFilter.estimateSize());
+        }
+
+        //Load Static Tile IDs
+        JSONArray staticTiles = new JSONArray();
+        if(useStatic) {
+            try {
+                staticTiles = (JSONArray) new JSONParser().parse(new FileReader(new File(staticTileIDsPath)));
+                System.out.println(staticTiles.size() + " Static Tile IDs are loaded");
+            } catch (ParseException e) {
+                e.printStackTrace();
+            }
+        }
+
         try {
             System.out.println("Testing server...");
             Unirest.setTimeouts(0, 0);
@@ -43,9 +61,34 @@ public class Main {
             return;
         }
 
-        server += tilePattern;
+        String[] inputPaths = inputPath.split(",");
+        File[] folders = new File[inputPaths.length];
+        folders[0] = new File(inputPaths[0]);
+        int minFolder = folders[0].listFiles().length;
+        for(int i = 1; i < inputPaths.length; i++) {
+            folders[i] = new File(inputPaths[i]);
+            if(folders[0].listFiles().length < minFolder) minFolder = folders[0].listFiles().length;
+        }
 
-        File folder = new File("Inputs/ebd_input_dense");
+        JSONArray users = new JSONArray();
+        for (int i = 0; i < minFolder; i++) {
+            try {
+                for(int j = 0; j < inputPaths.length; j++) {
+                    users.add((JSONObject) new JSONParser().parse(new FileReader(folders[j].listFiles()[i])));
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (ParseException e) {
+                e.printStackTrace();
+            } catch (ClassCastException e) {
+                e.printStackTrace();
+            }
+
+        }
+/*
+
+        File folder = new File(inputPath);
         JSONArray users = new JSONArray();
         for (final File fileEntry : folder.listFiles()) {
             try {
@@ -62,7 +105,7 @@ public class Main {
                 System.out.println(fileEntry.getName());
             }
 
-        }
+        }*/
 
         System.out.println("Test files are loaded.");
 
@@ -97,14 +140,14 @@ public class Main {
                     }
             }
 
-
-
             System.out.println(testObject.keySet().size()+" request times are loaded");
-
             System.out.println("Test is started");
 
             Vector<Long> requests = new Vector<Long>();
             Vector<Long> bloomed = new Vector<Long>();
+            Vector<Long> staticCatched = new Vector<Long>();
+
+            Vector<Long> times = new Vector<Long>();
 
             Set globalJOKeys = testObject.keySet();
             Iterator globalJOIterator = globalJOKeys.iterator();
@@ -114,10 +157,11 @@ public class Main {
             int counter = 0;
             while (globalJOIterator.hasNext()) {
                 String k = globalJOIterator.next().toString();
-                if (useBloom)
-                    tasks.add(counter, new TimedRequest(counter, server, (JSONArray) testObject.get(k), 1, requests, bloomed, bloomFilter, bloomLevel));
-                else
-                    tasks.add(counter, new TimedRequest(counter, server, (JSONArray) testObject.get(k), 1, requests));
+                tasks.add(counter, new TimedRequest(counter, server, tilePattern, (JSONArray) testObject.get(k), 1, requests,
+                        useBloom, bloomed, bloomFilter, bloomLevel,
+                        staticCatched, staticTiles, staticServer,
+                        times));
+
                 timer.schedule(tasks.get(counter), Long.valueOf(k));
                 counter++;
             }
@@ -140,29 +184,58 @@ public class Main {
 
             long overLimit = 0;
             long underLimit = 0;
+            long totalResponseTimes = 0;
+            float averageResponseTime = 0;
+
+            long totalBloomedTimes = 0;
+            float averageBloomedTime = 0;
+
+            long totalStaticTimes = 0;
+            float averageStaticTime = 0;
 
             PrintStream timesForEachRequest;
             File timesfile = new File("Outputs/"+testTitle+"/"+testTitle+"-" + (useBloom ? "bloom_on" : "bloom_off") + "-" + i + ".tsv");
             timesForEachRequest = new PrintStream(timesfile);
 
-            Iterator it = requests.iterator();
-            while (it.hasNext()) {
-                long t = (Long) it.next();
+            for (long t : requests) {
                 //System.out.println(t);
                 timesForEachRequest.println(t);
+                totalResponseTimes+=t;
                 if (t >= limit) overLimit++;
                 else underLimit++;
             }
 
+            for (long t : bloomed) {
+                //System.out.println(t);
+                //timesForEachRequest.println(t);
+                totalBloomedTimes+=t;
+            }
+
+            for (long t : staticCatched) {
+                //System.out.println(t);
+                //timesForEachRequest.println(t);
+                totalStaticTimes+=t;
+                if(useStatic) {
+                    if (t >= limit) overLimit++;
+                    else underLimit++;
+                }
+            }
+
+
+
             timesForEachRequest.close();
 
+            averageResponseTime = (float) totalResponseTimes / (overLimit + underLimit);
+            averageBloomedTime = (float) totalBloomedTimes / bloomed.size();
+            averageStaticTime = (float) totalStaticTimes / staticCatched.size();
+
             if (i == start) {
-                finalTestResult.println("Users\tBloom Filter\tRequests\tDelayed\tD.Percentage");
+                finalTestResult.println("Users\tBloom Filter\tStatic Tiles\tRequests\tDelayed\tD.Percentage\tAverage R. Time\tAverage B. Time\tAverage S. Time");
             }
             float p = ((float) overLimit / (float) ((bloomed.size()) + (overLimit + underLimit))) * 100;
             //String line = (users * multiplier) +"\t" + (useBloom ? "On" : "Off") + "\t" +  (overLimit + underLimit) + "\t" + failedCounter + "\t" + overLimit;
-            String line = (i) + "\t" + bloomed.size() + "\t" + (overLimit + underLimit) + "\t" + overLimit + "\t" + p;
-            System.out.println("Users\tBloom Filter\tRequests\tDelayed\tD.Percentage");
+            String line = (i) + "\t" + bloomed.size() + "\t"+ staticCatched.size() + "\t" + (overLimit + underLimit) + "\t" + overLimit + "\t" + p + "\t" + averageResponseTime+ "\t" + averageBloomedTime+ "\t" + averageStaticTime;
+            System.out.println("Users\tBloom Filter\tStatic Tiles\tRequests\tDelayed\tD.Percentage\tAverage R. Time\tAverage B. Time\tAverage S. Time");
             System.out.println(line);
             finalTestResult.println(line);
 
