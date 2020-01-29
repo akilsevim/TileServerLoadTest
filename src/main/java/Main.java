@@ -8,40 +8,71 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.*;
 
 public class Main {
+    private static int bloomLevel;
+
+    // FileNameFilter implementation
+    public static class ExtFileNameFilter implements FilenameFilter {
+
+        private String extension;
+
+        public ExtFileNameFilter(String extension) {
+            this.extension = extension.toLowerCase();
+        }
+
+        @Override
+        public boolean accept(File dir, String name) {
+            return name.toLowerCase().endsWith(extension);
+        }
+
+    }
+
     public static void main(String[] args) throws IOException, InterruptedException {
 
         //Bloom Filter Configuration
         boolean useBloom = true;
-        int bloomLevel = 19;
-        int numberOfHashFunctions = 17;
-        int sizeOfTheBloomFilter = 567619585;
-        String bloomFilterPath = "BloomFilters/ebd_bloomfilter_55MB_19/bloom_filter";
+        boolean useHQ = true;
+        String bloomFilterPath = "BloomFilters/test_0_2_hq_filter";
 
         //Static tile redirection configuration
-        boolean useStatic = true;
+        boolean useStatic = false;
         String staticTileIDsPath = "StaticTileIds/staticTileIDs.json";
 
         //Test configuration
         int start = 2;
-        int stop = 50;
+        int stop = 10;
         int increment = 2;
-        String inputPath = "Inputs/ebd_input_dense,Inputs/ebd_input_sparse"; //To make a combination of requests add additional paths with comas
-        String testTitle = "Ebird_N_California_Combined_Static_On_Bloom_On_S3_2-50";
+        String inputPath = "Inputs/skewness_dense"; //To make a combination of requests add additional paths with comas
+        String testTitle = "Skewness Test 0_2 Dense Only";
         int limit = 500; //Time limit for the response times
-        String server = "http://ec2-54-215-192-47.us-west-1.compute.amazonaws.com/dynamic/visualize.cgi/ebd_plot/";
+        String server = "http://localhost:8890/dynamic/visualize.cgi/test_0_2_plot_csv/";
         String staticServer = "https://s3-us-west-1.amazonaws.com/visualizationserver/ebd_plot/";
         String tilePattern = "tile-{z}-{x}-{y}.png";
 
-        //Load Bloom Filter
-        BloomFilter bloomFilter = new BloomFilter(sizeOfTheBloomFilter,numberOfHashFunctions);
-        if(useBloom) {
-            bloomFilter.read(bloomFilterPath);
-            System.out.println("Bloom Filter loaded with false positive probability of " + bloomFilter.getFPP() + " and estimated n is " + bloomFilter.estimateSize());
+        BloomFilter bloomFilter = null;
+        if (useBloom) {
+            //Load Bloom Filter
+            JSONParser jsonParser = new JSONParser();
+            try (FileReader reader = new FileReader(bloomFilterPath + "/bloomfilter_properties.json")) {
+                //Read JSON file
+                Object obj = jsonParser.parse(reader);
+                JSONObject HQFilterConfiguration = (JSONObject) obj;
+                bloomLevel = Integer.valueOf(HQFilterConfiguration.get("levels").toString());
+                int sizeOfTheBloomFilter = Integer.valueOf(HQFilterConfiguration.get("size").toString());
+                int numberOfHashFunctions = Integer.valueOf(HQFilterConfiguration.get("k").toString());
+
+                bloomFilter = new BloomFilter(sizeOfTheBloomFilter, numberOfHashFunctions);
+                bloomFilter.read(bloomFilterPath+ "/bloom_filter");
+                System.out.println("Bloom Filter loaded with false positive probability of " + bloomFilter.getFPP() + " and estimated n is " + bloomFilter.estimateSize());
+
+
+            } catch (IOException | ParseException e) {
+                e.printStackTrace();
+            }
         }
 
         //Load Static Tile IDs
         JSONArray staticTiles = new JSONArray();
-        if(useStatic) {
+        if (useStatic) {
             try {
                 staticTiles = (JSONArray) new JSONParser().parse(new FileReader(new File(staticTileIDsPath)));
                 System.out.println(staticTiles.size() + " Static Tile IDs are loaded");
@@ -54,8 +85,8 @@ public class Main {
             System.out.println("Testing server...");
             Unirest.setTimeouts(0, 0);
             Unirest.setConcurrency(400, 400);
-            int status = Unirest.get(server+"index.html").asString().getStatus();
-            System.out.println("Test result: "+ status);
+            int status = Unirest.get(server + "index.html").asString().getStatus();
+            System.out.println("Test result: " + status);
         } catch (UnirestException e) {
             e.printStackTrace();
             return;
@@ -64,17 +95,18 @@ public class Main {
         String[] inputPaths = inputPath.split(",");
         File[] folders = new File[inputPaths.length];
         folders[0] = new File(inputPaths[0]);
-        int minFolder = folders[0].listFiles().length;
-        for(int i = 1; i < inputPaths.length; i++) {
+        int minFolder = folders[0].listFiles(new ExtFileNameFilter(".json")).length;
+        for (int i = 1; i < inputPaths.length; i++) {
+            //if(!inputPaths[i].endsWith(".json")) continue;
             folders[i] = new File(inputPaths[i]);
-            if(folders[0].listFiles().length < minFolder) minFolder = folders[0].listFiles().length;
+            if (folders[i].listFiles().length < minFolder) minFolder = folders[i].listFiles().length;
         }
 
         JSONArray users = new JSONArray();
         for (int i = 0; i < minFolder; i++) {
             try {
-                for(int j = 0; j < inputPaths.length; j++) {
-                    users.add((JSONObject) new JSONParser().parse(new FileReader(folders[j].listFiles()[i])));
+                for (int j = 0; j < inputPaths.length; j++) {
+                    users.add((JSONObject) new JSONParser().parse(new FileReader(folders[j].listFiles(new ExtFileNameFilter(".json"))[i])));
                 }
 
             } catch (IOException e) {
@@ -86,7 +118,7 @@ public class Main {
             }
 
         }
-/*
+        /*
 
         File folder = new File(inputPath);
         JSONArray users = new JSONArray();
@@ -110,12 +142,12 @@ public class Main {
         System.out.println("Test files are loaded.");
 
         PrintStream finalTestResult;
-        File finalFile = new File("Outputs/"+testTitle+"/"+testTitle + "-" + (useBloom ? "bloom_on" : "bloom_off") + "-"+start+"_"+stop+".tsv");
+        File finalFile = new File("Outputs/" + testTitle + "/" + testTitle + "-" + (useBloom ? "bloom_on" : "bloom_off") + "-" + start + "_" + stop + ".tsv");
         finalFile.getParentFile().mkdirs();
         finalTestResult = new PrintStream(finalFile);
 
 
-        for(int i = start; i <= stop; i += increment) {
+        for (int i = start; i <= stop; i += increment) {
             System.out.println("Loading test for " + i + " users");
 
             JSONObject testObject = new JSONObject();
@@ -123,24 +155,24 @@ public class Main {
 
             for (int j = 0; j < i; j++) {
 
-                    JSONObject userObject = (JSONObject) users.get(j % users.size());
+                JSONObject userObject = (JSONObject) users.get(j % users.size());
 
-                    for (Object o : userObject.keySet()) {
-                        String k = o.toString();
+                for (Object o : userObject.keySet()) {
+                    String k = o.toString();
 
-                        JSONArray t = new JSONArray();
+                    JSONArray t = new JSONArray();
 
-                        if (testObject.containsKey(k)) {
-                            //System.out.println("Contains:" + kI);
-                            t = (JSONArray) testObject.get(k);
-                        }
-                        t.add(userObject.get(k));
-
-                        testObject.put(k, t);
+                    if (testObject.containsKey(k)) {
+                        //System.out.println("Contains:" + kI);
+                        t = (JSONArray) testObject.get(k);
                     }
+                    t.add(userObject.get(k));
+
+                    testObject.put(k, t);
+                }
             }
 
-            System.out.println(testObject.keySet().size()+" request times are loaded");
+            System.out.println(testObject.keySet().size() + " request times are loaded");
             System.out.println("Test is started");
 
             Vector<Long> requests = new Vector<Long>();
@@ -157,10 +189,14 @@ public class Main {
             int counter = 0;
             while (globalJOIterator.hasNext()) {
                 String k = globalJOIterator.next().toString();
-                tasks.add(counter, new TimedRequest(counter, server, tilePattern, (JSONArray) testObject.get(k), 1, requests,
-                        useBloom, bloomed, bloomFilter, bloomLevel,
-                        staticCatched, staticTiles, staticServer,
-                        times));
+                if (useBloom) {
+                    tasks.add(counter, new TimedRequest(counter, server, tilePattern, (JSONArray) testObject.get(k), 1, requests,
+                            useBloom, bloomed, bloomFilter, bloomLevel, useHQ,
+                            staticCatched, staticTiles, staticServer,
+                            times));
+                } else {
+                    tasks.add(counter, new TimedRequest(counter, server, tilePattern, (JSONArray) testObject.get(k), 1, requests, useBloom, staticCatched, staticTiles, staticServer, times));
+                }
 
                 timer.schedule(tasks.get(counter), Long.valueOf(k));
                 counter++;
@@ -172,6 +208,7 @@ public class Main {
                 for (TimedRequest t : tasks) {
                     //System.out.println(t.toString() +":"+ t.isDone());
                     if (!t.isDone()) {
+                        Thread.sleep(10);
                         test = true;
                         break;
                     }
@@ -194,13 +231,13 @@ public class Main {
             float averageStaticTime = 0;
 
             PrintStream timesForEachRequest;
-            File timesfile = new File("Outputs/"+testTitle+"/"+testTitle+"-" + (useBloom ? "bloom_on" : "bloom_off") + "-" + i + ".tsv");
+            File timesfile = new File("Outputs/" + testTitle + "/" + testTitle + "-" + (useBloom ? "bloom_on" : "bloom_off") + "-" + i + ".tsv");
             timesForEachRequest = new PrintStream(timesfile);
 
             for (long t : requests) {
                 //System.out.println(t);
                 timesForEachRequest.println(t);
-                totalResponseTimes+=t;
+                totalResponseTimes += t;
                 if (t >= limit) overLimit++;
                 else underLimit++;
             }
@@ -208,19 +245,18 @@ public class Main {
             for (long t : bloomed) {
                 //System.out.println(t);
                 //timesForEachRequest.println(t);
-                totalBloomedTimes+=t;
+                totalBloomedTimes += t;
             }
 
             for (long t : staticCatched) {
                 //System.out.println(t);
                 //timesForEachRequest.println(t);
-                totalStaticTimes+=t;
-                if(useStatic) {
+                totalStaticTimes += t;
+                if (useStatic) {
                     if (t >= limit) overLimit++;
                     else underLimit++;
                 }
             }
-
 
 
             timesForEachRequest.close();
@@ -234,7 +270,7 @@ public class Main {
             }
             float p = ((float) overLimit / (float) ((bloomed.size()) + (overLimit + underLimit))) * 100;
             //String line = (users * multiplier) +"\t" + (useBloom ? "On" : "Off") + "\t" +  (overLimit + underLimit) + "\t" + failedCounter + "\t" + overLimit;
-            String line = (i) + "\t" + bloomed.size() + "\t"+ staticCatched.size() + "\t" + (overLimit + underLimit) + "\t" + overLimit + "\t" + p + "\t" + averageResponseTime+ "\t" + averageBloomedTime+ "\t" + averageStaticTime;
+            String line = (i) + "\t" + bloomed.size() + "\t" + staticCatched.size() + "\t" + (overLimit + underLimit) + "\t" + overLimit + "\t" + p + "\t" + averageResponseTime + "\t" + averageBloomedTime + "\t" + averageStaticTime;
             System.out.println("Users\tBloom Filter\tStatic Tiles\tRequests\tDelayed\tD.Percentage\tAverage R. Time\tAverage B. Time\tAverage S. Time");
             System.out.println(line);
             finalTestResult.println(line);
@@ -246,145 +282,7 @@ public class Main {
         finalTestResult.close();
         Unirest.shutdown();
 
-        /*
-
-        int userLimit = 21;
-        int magnifier = 1;
-
-        for(int userCount = 1; userCount < userLimit; userCount++) {
-
-            int users = 0;
-            JSONObject globalJO = new JSONObject();
-
-            for (final File fileEntry : folder.listFiles()) {
-                if (users == userCount) break;
-                try {
-                    users++;
-                    //System.out.println("User:" + users);
-                    JSONObject jo = (JSONObject) new JSONParser().parse(new FileReader(fileEntry));
-
-                    for (Object o : jo.keySet()) {
-                        String k = o.toString();
-
-                        int kI = Integer.parseInt(o.toString());
-                        kI = kI - (kI % magnifier);
-
-                        JSONArray t = new JSONArray();
-
-                        if (globalJO.containsKey(Integer.toString(kI))) {
-                            //System.out.println("Contains:" + kI);
-                            t = (JSONArray) globalJO.get(Integer.toString(kI));
-                        }
-                        t.add(jo.get(k));
-
-                        globalJO.put(Integer.toString(kI), t);
-                    }
-
-
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } catch (ParseException e) {
-                    e.printStackTrace();
-                } catch (ClassCastException e) {
-                    e.printStackTrace();
-                    System.out.println(fileEntry.getName());
-                }
-
-            }
-
-            PrintStream outb;
-            outb = new PrintStream(new File("ebd-user-california-" + (useBloom ? "bloom_on" : "bloom_off") + "-" + (System.nanoTime()) + ".tsv"));
-
-
-
-
-            for (int testCounter = 1; testCounter < 2; testCounter++) {
-
-
-                Vector<Long> requests = new Vector<Long>();
-                Vector<Long> bloomed = new Vector<Long>();
-                Vector<Long> failed = new Vector<Long>();
-
-                Set globalJOKeys = globalJO.keySet();
-                Iterator globalJOIterator = globalJOKeys.iterator();
-
-                ArrayList<TimedRequest> tasks = new ArrayList<TimedRequest>();
-                Timer timer = new Timer();
-                int counter = 0;
-                while (globalJOIterator.hasNext()) {
-                    String k = globalJOIterator.next().toString();
-                    if (useBloom)
-                        tasks.add(counter, new TimedRequest(counter, server, (JSONArray) globalJO.get(k), testCounter, requests, failed, bloomed, bloomFilter, bloomLevel));
-                    else
-                        tasks.add(counter, new TimedRequest(counter, server, (JSONArray) globalJO.get(k), testCounter, requests, failed));
-                    timer.schedule(tasks.get(counter), Long.valueOf(k));
-                    counter++;
-                }
-
-                boolean test = true;
-                while (test) {
-                    test = false;
-                    for (TimedRequest t : tasks) {
-                        //System.out.println(t.toString() +":"+ t.isDone());
-                        if (!t.isDone()) {
-                            test = true;
-                            break;
-                        }
-                    }
-                }
-
-                Thread.sleep(100);
-
-                int limit = 500;
-
-                long overLimit = 0;
-                long underLimit = 0;
-                long failedCounter = failed.size();
-
-                PrintStream outc;
-                outc = new PrintStream(new File("ebd-tile-california-" + (useBloom ? "bloom_on" : "bloom_off") + "-" + (userCount * testCounter) + "-" + (System.nanoTime()) + ".tsv"));
-
-                Iterator it = requests.iterator();
-                while (it.hasNext()) {
-                    long t = (Long) it.next();
-                    //System.out.println(t);
-                    outc.println(t);
-                    if (t >= limit) overLimit++;
-                    else underLimit++;
-                }
-
-                outc.close();
-
-            /*
-            Iterator it_b = bloomed.iterator();
-            while (it_b.hasNext()) {
-                long t = (Long) it_b.next();
-                System.out.println(t);
-                if (t >= limit) overLimit++;
-                else underLimit++;
-            }
-
-
-                if (testCounter == 1) {
-                    System.out.println("Users\tBloom Filter\tRequests\tFailed Requests\tDelayed\tD.Percentage");
-                    outb.println("Users\tBloom Filter\tRequests\tFailed Requests\tDelayed\tD.Percentage");
-                }
-                float p = ((float) overLimit / (float) ((bloomed.size() * testCounter) + (overLimit + underLimit + failedCounter))) * 100;
-                //String line = (users * multiplier) +"\t" + (useBloom ? "On" : "Off") + "\t" +  (overLimit + underLimit) + "\t" + failedCounter + "\t" + overLimit;
-                String line = (users * testCounter) + "\t" + bloomed.size() * testCounter + "\t" + (overLimit + underLimit) + "\t" + failedCounter + "\t" + overLimit + "\t" + p;
-                System.out.println(line);
-                outb.println(line);
-
-                Thread.sleep(150);
-
-            }
-
-
-            outb.close();
-
-        }
-
-        Unirest.shutdown();*/
+        return;
 
     }
 

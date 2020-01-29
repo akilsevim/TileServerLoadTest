@@ -9,7 +9,7 @@ import java.io.InputStream;
 import java.util.*;
 
 public class TimedRequest extends TimerTask {
-    private String url;
+    public String url;
     private String tilePattern;
     private JSONArray ja;
     private int multiplier;
@@ -21,6 +21,7 @@ public class TimedRequest extends TimerTask {
     private Vector<Long> times;
     private BloomFilter bloom;
     private boolean bloomEnabled = false;
+    private boolean useHQ = false;
     private int bloomLevel;
 
     private boolean staticEnabled = false;
@@ -35,7 +36,7 @@ public class TimedRequest extends TimerTask {
         this.id = id;
         this.requests = requests;
     }
-    TimedRequest(int id, String url, String tilePattern, JSONArray ja, int multiplier, Vector<Long> requests, boolean useBloom, Vector<Long> bloomed, BloomFilter bloom, int bloomLevel, Vector<Long> staticCatched, JSONArray staticTiles, String staticServer, Vector<Long> times) {
+    TimedRequest(int id, String url, String tilePattern, JSONArray ja, int multiplier, Vector<Long> requests, boolean useBloom, Vector<Long> bloomed, BloomFilter bloom, int bloomLevel, boolean useHQ, Vector<Long> staticCatched, JSONArray staticTiles, String staticServer, Vector<Long> times) {
         this.url = url;
         this.id = id;
         this.ja = ja;
@@ -45,9 +46,29 @@ public class TimedRequest extends TimerTask {
         this.tilePattern = tilePattern;
 
         this.bloomEnabled = useBloom;
+        this.useHQ = useHQ;
         this.bloomed = bloomed;
         this.bloom = bloom;
         this.bloomLevel = bloomLevel;
+
+        if(staticTiles.size() != 0) this.staticEnabled = true;
+        this.staticTileIDs = staticTiles;
+        this.statics = staticCatched;
+        this.staticServer = staticServer;
+
+        this.times = times;
+    }
+
+    TimedRequest(int id, String url, String tilePattern, JSONArray ja, int multiplier, Vector<Long> requests, boolean useBloom, Vector<Long> staticCatched, JSONArray staticTiles, String staticServer, Vector<Long> times) {
+        this.url = url;
+        this.id = id;
+        this.ja = ja;
+        this.multiplier = multiplier;
+        this.isDone = false;
+        this.requests = requests;
+        this.tilePattern = tilePattern;
+
+        this.bloomEnabled = useBloom;
 
         if(staticTiles.size() != 0) this.staticEnabled = true;
         this.staticTileIDs = staticTiles;
@@ -95,8 +116,10 @@ public class TimedRequest extends TimerTask {
                 long start = System.nanoTime();
                 long tID = tileID;
 
-                if(z > bloomLevel) {
+                if(z > bloomLevel && useHQ) {
                     tID = findParent(z,x,y,bloomLevel);
+                } else if (z > bloomLevel) {
+                    continue;
                 }
 
                 if(!bloom.mightContain(tID)) {

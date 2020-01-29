@@ -14,16 +14,8 @@
  * limitations under the License.
  */
 
-import com.sun.xml.internal.messaging.saaj.packaging.mime.util.BASE64DecoderStream;
-import org.apache.commons.codec.binary.Base64;
-import org.apache.commons.codec.binary.Base64InputStream;
-import sun.misc.BASE64Decoder;
-
 import java.io.*;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import javax.xml.bind.DatatypeConverter;
 
 /**
  * An array of bits which is stored efficiently in memory and can be serialized
@@ -104,7 +96,6 @@ public class BitArray {
   public boolean get(long i) {
     int entry = (int) (i / BitsPerEntry);
     int offset = (int) (i % BitsPerEntry);
-    System.out.println("entry:"+ entry+" offset: "+ offset);
     return (entries[entry] & (1L << offset)) != 0;
   }
 
